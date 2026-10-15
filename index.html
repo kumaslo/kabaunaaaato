@@ -65,7 +65,7 @@ body{display:flex;justify-content:center;align-items:center}
 </head>
 <body>
 <div id="app" class="app-container">
-<header class="app-header"><h1>海門決戦コンパス</h1><span class="version-badge">Ver.1.0.0</span></header>
+<header class="app-header"><h1>海門決戦コンパス</h1><div style="display:flex;align-items:center;gap:6px"><img src="https://visitor-badge.laobi.icu/badge?page_id=kumaslo.kabaunaaaato" alt="views" style="height:18px;vertical-align:middle;"><span class="version-badge">Ver.1.1.0</span></div></header>
 <main class="app-main">
 
 <section id="tab-memo" class="tab-content active">
@@ -92,7 +92,10 @@ body{display:flex;justify-content:center;align-items:center}
 <div class="stat-row"><span>ST突入確率（通常G）:</span><strong id="calc-st">---</strong></div>
 <div class="stat-row"><span>下段ベル確率（総G）:</span><strong id="calc-bell">---</strong></div>
 <div class="stat-row"><span>CZ回数（記録のみ）:</span><strong id="calc-cz">---</strong></div>
-<div class="stat-row"><span>3周期目 当選率（記録のみ）:</span><strong id="calc-p3">---</strong></div></div>
+<div class="stat-row"><span>3周期目 当選率:</span><strong id="calc-p3">---</strong></div>
+<div class="stat-row"><span>4周期目 当選率:</span><strong id="calc-p4">---</strong></div>
+<div class="stat-row"><span>単独チャンス目 3000pt率:</span><strong id="calc-ch">---</strong></div>
+<div class="stat-row"><span>復讐の焔 裏景之率:</span><strong id="calc-rev">---</strong></div></div>
 <div id="result-breakdowns"></div>
 </section>
 
@@ -100,12 +103,17 @@ body{display:flex;justify-content:center;align-items:center}
 <h2>解析データ</h2>
 <div class="result-card"><h3>ボーナス・ST・下段ベル・機械割</h3>
 <table class="spec-table" id="spec-table"><thead><tr><th>設定</th><th>ボーナス</th><th>ST</th><th>下段ベル</th><th>機械割</th></tr></thead><tbody></tbody></table></div>
+<div class="result-card"><h3>周期・チャンス目・復讐の焔（設定別）</h3>
+<table class="spec-table"><thead><tr><th>設定</th><th>3周期目</th><th>4周期目</th><th>3000pt</th><th>裏景之</th></tr></thead><tbody id="cycle-body"></tbody></table></div>
 <div class="result-card"><h3>示唆一覧（推測に反映）</h3><div id="hint-list" style="font-size:.78rem;line-height:1.7"></div></div>
 <div class="result-card"><h3>データについて</h3><div class="src">
 ・確率・機械割は pachiseven / ちょんぼりすた / p-town / altema など複数サイトで突き合わせた値です。<br>
 ・下段ベルの確率は p-town のみで確認できた値のため、参考程度に扱ってください。<br>
-・トロフィーは店舗カスタムで出現率が変わることがあるため、推測への影響は弱めにしています（目安）。<br>
-・CZ回数と3周期目到達／当選は設定差が不明なため記録のみで、推測には使いません。</div></div>
+・トロフィーは店舗カスタムで出現率が変わることがあるため、推測への影響はやや控えめにしています。<br>
+・ボーナス中ボイスは「逆押しでサンド目」で発生。設定別の出現率は設定6分しか公開されておらず、各設定の振り分けは示唆の強弱から割り振った目安です。<br>
+・アイテムくじの小吉は、電源ON後5回目までの出現が設定6寄りとの情報もありますが濃厚ではないため推測には使っていません。<br>
+・周期当選率・チャンス目・裏景之は二項分布で推測に反映（サンプルが少ないうちは影響小）。<br>
+・CZ回数は設定差が不明なため記録のみです。</div></div>
 </section>
 
 <section id="tab-inference" class="tab-content">
@@ -120,6 +128,7 @@ body{display:flex;justify-content:center;align-items:center}
 <label><input type="checkbox" id="chk-factor-bonus" checked onchange="updateInferenceDistribution()"> ボーナス</label>
 <label><input type="checkbox" id="chk-factor-st" checked onchange="updateInferenceDistribution()"> ST</label>
 <label><input type="checkbox" id="chk-factor-bell" checked onchange="updateInferenceDistribution()"> 下段ベル</label>
+<label><input type="checkbox" id="chk-factor-cycle" checked onchange="updateInferenceDistribution()"> 周期・焔等</label>
 <label><input type="checkbox" id="chk-factor-hint" checked onchange="updateInferenceDistribution()"> 示唆</label></div>
 <div id="inference-distribution-container" style="margin-top:10px"></div></div>
 </section>
@@ -146,27 +155,39 @@ const APP_DATA={specs:{
  bonusProb:[254.2,242.3,239.6,214.0,203.2,195.1],
  stProb:[422.5,405.9,398.7,357.2,332.6,318.5],
  bellProb:[121.1,114.4,112.8,106.2,104.2,99.1],
- payout:[97.5,98.5,100.8,106.0,111.0,114.9]}};
+ payout:[97.5,98.5,100.8,106.0,111.0,114.9],
+ p3:[.184,.238,.211,.285,.324,.371],
+ p4:[.336,.352,.363,.402,.434,.469],
+ chance:[.012,.02,.02,.02,.02,.023],
+ revUra:[.062,.062,.066,.109,.25,.332]}};
 
 const COUNTERS=[
  {id:'input-bonus',label:'ボーナス回数'},
  {id:'input-st',label:'ST突入回数'},
  {id:'input-bell',label:'下段ベル回数（総G連動）'},
  {id:'input-cz',label:'CZ回数（記録のみ）'},
- {id:'input-p3reach',label:'3周期目 到達回数（記録のみ）'},
- {id:'input-p3hit',label:'3周期目 当選回数（記録のみ）'}];
+ {id:'input-p3reach',label:'3周期目 到達回数（分母）'},
+ {id:'input-p3hit',label:'3周期目 ボーナス当選回数'},
+ {id:'input-p4reach',label:'4周期目 到達回数（分母）'},
+ {id:'input-p4hit',label:'4周期目 ボーナス当選回数'},
+ {id:'input-ch-tot',label:'単独チャンス目 回数（分母）'},
+ {id:'input-ch-hit',label:'うち 3000pt獲得回数'},
+ {id:'input-rev-tot',label:'復讐の焔 成功回数（分母）'},
+ {id:'input-rev-ura',label:'うち 裏景之 回数'}];
 
 const HISTORY_DEFS=[
- {key:'omikuji',title:'おみくじ',opts:['小吉（設定1否定）','中吉（設定3以下否定）','大吉（設定6濃厚）']},
- {key:'item',title:'アイテム示唆',opts:['菖蒲の弓（高設定寄り・弱）','ミヤマカラスアゲハ（高設定示唆・強）','来栖の刀（設定2・3否定）','無名のけん玉（設定1・3否定）','自決袋（設定1否定・弱）','無名の短銃（設定3否定・弱）','ツラヌキ筒（設定4否定・弱）']},
- {key:'stscreen',title:'ST終了画面',opts:['鉄下駄（デフォルト）','甲鉄城メンバー（高設定示唆・弱）','水着（設定6濃厚）']},
- {key:'trophy',title:'トロフィー（目安）',opts:['銅（設定1否定）','銀（設定2以下否定）','金（設定3以下否定）','キリン柄（設定4以上）','虹（設定6濃厚）']}];
+ {key:'item',title:'アイテムくじ',opts:['小吉（設定2以上濃厚）','中吉（設定4以上濃厚）','大吉（設定6濃厚）','菖蒲の弓（高設定示唆）','ミヤマカラスアゲハ（高設定示唆・強）','来栖の刀（設定2・3否定）','無名のけん玉（設定1・3否定）','自決袋（設定1で出にくい）','無名の短銃（設定3で出にくい）','ツラヌキ筒（設定4で出にくい）']},
+ {key:'voice',title:'ボーナス中ボイス',opts:['男性ボイス（景之以外・設定3/5寄り）','女性ボイス（無名の特定除く・偶数寄り）','景之「なぜ言わなかった」（高設定・弱）','景之「ヒトか、カバネか」（高設定・中）','景之「今年は最後かな」（高設定・強）','無名「やっぱり普通じゃないね」（設定2以上濃厚）','ボイスなし（設定5以上濃厚）']},
+ {key:'chara',title:'ボーナス中キャラ紹介',opts:['女性（無名・菖蒲・鰍・侑那／偶数寄り）','男性（生駒・来栖・景之／設定3・5寄り）','美馬（設定4以上濃厚）']},
+ {key:'display',title:'上乗せ・獲得枚数表示',opts:['+44（設定4以上濃厚）','+55（設定5以上濃厚）','+66/+77（設定6濃厚）','456OVER（設定4以上濃厚）','666OVER（設定6濃厚）']},
+ {key:'stscreen',title:'ST終了画面',opts:['鉄下駄（デフォルト）','甲鉄城メンバー（高設定示唆）','水着＝無名＆菖蒲（設定6濃厚）']},
+ {key:'trophy',title:'サミートロフィー',opts:['銅（設定2以上濃厚）','銀（設定3以上濃厚）','金（設定4以上濃厚）','キリン柄（設定5以上濃厚）','虹（設定6濃厚）']}];
 
 // exclude/favor は 0=設定1 … 5=設定6
 const SUGGESTION_RULES=[
- {key:'omikuji',match:'小吉',exclude:[0],strength:'strong'},
- {key:'omikuji',match:'中吉',exclude:[0,1,2],strength:'strong'},
- {key:'omikuji',match:'大吉',favor:[5],exclusive:true,strength:'strong'},
+ {key:'item',match:'小吉',exclude:[0],strength:'strong'},
+ {key:'item',match:'中吉',exclude:[0,1,2],strength:'strong'},
+ {key:'item',match:'大吉',favor:[5],exclusive:true,strength:'strong'},
  {key:'item',match:'菖蒲の弓',favor:[3,4,5],strength:'weak'},
  {key:'item',match:'ミヤマカラスアゲハ',favor:[3,4,5],strength:'strong'},
  {key:'item',match:'来栖の刀',exclude:[1,2],strength:'strong'},
@@ -174,12 +195,27 @@ const SUGGESTION_RULES=[
  {key:'item',match:'自決袋',exclude:[0],strength:'weak'},
  {key:'item',match:'無名の短銃',exclude:[2],strength:'weak'},
  {key:'item',match:'ツラヌキ筒',exclude:[3],strength:'weak'},
+ {key:'voice',match:'男性ボイス',favor:[2,4],strength:'weak'},
+ {key:'voice',match:'女性ボイス',favor:[1,3,5],strength:'weak'},
+ {key:'voice',match:'景之「なぜ',favor:[3,4,5],strength:'weak'},
+ {key:'voice',match:'景之「ヒト',favor:[3,4,5],strength:'mid'},
+ {key:'voice',match:'景之「今年',favor:[4,5],strength:'strong'},
+ {key:'voice',match:'無名「やっぱり',exclude:[0],strength:'strong'},
+ {key:'voice',match:'ボイスなし',exclude:[0,1,2,3],strength:'strong'},
+ {key:'chara',match:'女性',favor:[1,3,5],strength:'weak'},
+ {key:'chara',match:'男性',favor:[2,4],strength:'weak'},
+ {key:'chara',match:'美馬',exclude:[0,1,2],strength:'strong'},
+ {key:'display',match:'+44',exclude:[0,1,2],strength:'strong'},
+ {key:'display',match:'+55',exclude:[0,1,2,3],strength:'strong'},
+ {key:'display',match:'+66',favor:[5],exclusive:true,strength:'strong'},
+ {key:'display',match:'456',exclude:[0,1,2],strength:'strong'},
+ {key:'display',match:'666',favor:[5],exclusive:true,strength:'strong'},
  {key:'stscreen',match:'甲鉄城メンバー',favor:[3,4,5],strength:'weak'},
  {key:'stscreen',match:'水着',favor:[5],exclusive:true,strength:'strong'},
  {key:'trophy',match:'銅',exclude:[0],strength:'trophy'},
  {key:'trophy',match:'銀',exclude:[0,1],strength:'trophy'},
  {key:'trophy',match:'金',exclude:[0,1,2],strength:'trophy'},
- {key:'trophy',match:'キリン柄',favor:[3,4,5],strength:'trophy'},
+ {key:'trophy',match:'キリン柄',exclude:[0,1,2,3],strength:'trophy'},
  {key:'trophy',match:'虹',favor:[5],exclusive:true,strength:'trophy'}];
 
 const STORE_KEY='kabaneri_unato_compass_v1';
@@ -203,6 +239,7 @@ function buildUI(){
  <div class="calc-card" id="card-${d.key}"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><h3 style="margin:0">${d.title} 履歴一覧</h3><button type="button" class="btn-danger btn-mini" onclick="clearHistory('${d.key}')">全削除</button></div><div id="list-${d.key}" style="max-height:150px;overflow-y:auto"></div></div>`).join('');
  $('result-breakdowns').innerHTML=HISTORY_DEFS.map(d=>`<div class="calc-card"><h3>${d.title} 分布集計</h3><div id="break-${d.key}" style="font-size:.85rem"></div></div>`).join('');
  $('spec-table').querySelector('tbody').innerHTML=[0,1,2,3,4,5].map(i=>`<tr><td>設定${i+1}</td><td data-col="bonus" data-val="${APP_DATA.specs.bonusProb[i]}">1/${APP_DATA.specs.bonusProb[i]}</td><td data-col="st" data-val="${APP_DATA.specs.stProb[i]}">1/${APP_DATA.specs.stProb[i]}</td><td data-col="bell" data-val="${APP_DATA.specs.bellProb[i]}">1/${APP_DATA.specs.bellProb[i]}</td><td>${APP_DATA.specs.payout[i]}%</td></tr>`).join('');
+ $('cycle-body').innerHTML=[0,1,2,3,4,5].map(i=>{const S=APP_DATA.specs,f=v=>(v*100).toFixed(1)+'%';return `<tr><td>設定${i+1}</td><td>${f(S.p3[i])}</td><td>${f(S.p4[i])}</td><td>${f(S.chance[i])}</td><td>${f(S.revUra[i])}</td></tr>`}).join('');
  $('hint-list').innerHTML=HISTORY_DEFS.map(d=>`<b style="color:#f4a79f">${d.title}</b><br>`+d.opts.map(o=>'・'+o).join('<br>')).join('<br><br>');
 }
 
@@ -225,6 +262,12 @@ function gaussianLikelihood(spec,actual,games,minGames,sharpness){
  if(!(actual>0)||games<minGames)return 1;
  return Math.max(0.05,Math.exp(-Math.abs(spec-actual)/spec*sharpness));}
 
+function binomFactor(probs,k,n,temper){
+ if(!(n>0))return null;
+ const lg=probs.map(p=>temper*(k*Math.log(p)+(n-k)*Math.log(1-p)));
+ const mx=Math.max(...lg);
+ return lg.map(v=>Math.max(0.05,Math.exp(v-mx)));}
+
 function applyRule(l,r){
  const set=r.exclude||r.favor,isEx=!!r.exclude;
  for(let i=0;i<6;i++){
@@ -233,23 +276,28 @@ function applyRule(l,r){
    const hi=r.strength==='trophy'?2.0:3.0,lo=r.strength==='trophy'?0.25:0.05;
    l[i]*=inSet?hi:lo;
   }else if(isEx){
-   if(inSet)l[i]*=r.strength==='strong'?0.02:r.strength==='weak'?0.4:0.25;
+   if(inSet)l[i]*=r.strength==='strong'?0.02:r.strength==='weak'?0.4:0.15;
   }else{
-   if(inSet)l[i]*=r.strength==='strong'?1.6:r.strength==='weak'?1.2:1.3;
+   if(inSet)l[i]*=r.strength==='strong'?1.6:r.strength==='mid'?1.4:r.strength==='weak'?1.2:1.3;
   }}}
 
-function toggleAllFactors(m){['bonus','st','bell','hint'].forEach(k=>$('chk-factor-'+k).checked=m.checked);updateInferenceDistribution();}
+function toggleAllFactors(m){['bonus','st','bell','cycle','hint'].forEach(k=>$('chk-factor-'+k).checked=m.checked);updateInferenceDistribution();}
 
 function updateInferenceDistribution(){
  const g=getGames(),S=APP_DATA.specs;
  const bonus=num('input-bonus'),st=num('input-st'),bell=num('input-bell');
  const hasHist=HISTORY_DEFS.some(d=>hist[d.key].length>0);
- if(!(g.total>0||bonus||st||bell||hasHist)){pct=[0,0,0,0,0,0];renderBars();return;}
+ const cyc=[['input-p3hit','input-p3reach','p3',0.7],['input-p4hit','input-p4reach','p4',0.7],['input-ch-hit','input-ch-tot','chance',0.5],['input-rev-ura','input-rev-tot','revUra',0.7]];
+ const hasCyc=cyc.some(c=>num(c[1])>0);
+ if(!(g.total>0||bonus||st||bell||hasHist||hasCyc)){pct=[0,0,0,0,0,0];renderBars();return;}
  const l=[1,1,1,1,1,1];
  for(let i=0;i<6;i++){
   if($('chk-factor-bonus').checked)l[i]*=gaussianLikelihood(S.bonusProb[i],bonus>0?g.normal/bonus:0,g.normal,300,3);
   if($('chk-factor-st').checked)l[i]*=gaussianLikelihood(S.stProb[i],st>0?g.normal/st:0,g.normal,500,6);
   if($('chk-factor-bell').checked)l[i]*=gaussianLikelihood(S.bellProb[i],bell>0?g.total/bell:0,g.total,300,3);
+ }
+ if($('chk-factor-cycle').checked){
+  cyc.forEach(c=>{const f=binomFactor(S[c[2]],Math.min(num(c[0]),num(c[1])),num(c[1]),c[3]);if(f)for(let i=0;i<6;i++)l[i]*=f[i];});
  }
  if($('chk-factor-hint').checked){
   HISTORY_DEFS.forEach(d=>hist[d.key].forEach(h=>{
@@ -287,7 +335,11 @@ function calculateStats(){
  $('calc-bell').textContent=eA?`1 / ${eA.toFixed(1)}（${bell}回）`:'---';
  $('calc-cz').textContent=`${num('input-cz')}回`;
  const pr=num('input-p3reach'),ph=num('input-p3hit');
- $('calc-p3').textContent=pr>0?`${(ph/pr*100).toFixed(1)}%（${ph} / ${pr}）`:'---';
+ const rt=(h,t)=>t>0?`${(h/t*100).toFixed(1)}%（${h} / ${t}）`:'---';
+ $('calc-p3').textContent=rt(ph,pr);
+ $('calc-p4').textContent=rt(num('input-p4hit'),num('input-p4reach'));
+ $('calc-ch').textContent=rt(num('input-ch-hit'),num('input-ch-tot'));
+ $('calc-rev').textContent=rt(num('input-rev-ura'),num('input-rev-tot'));
  highlightCol('bonus',bA);highlightCol('st',sA);highlightCol('bell',eA);
  HISTORY_DEFS.forEach(d=>{
   const list=hist[d.key],c={};list.forEach(h=>c[h.v]=(c[h.v]||0)+1);
@@ -299,7 +351,7 @@ function calculateStats(){
 
 function reportText(){
  const g=getGames();
- let t=`🧭 海門決戦コンパス 実戦レポート\n通常G：${g.normal}G（総G：${g.total}G）\nボーナス：${$('calc-bonus').textContent}\nST：${$('calc-st').textContent}\n下段ベル：${$('calc-bell').textContent}\nCZ：${num('input-cz')}回 / 3周期目：${$('calc-p3').textContent}\n`;
+ let t=`🧭 海門決戦コンパス 実戦レポート\n通常G：${g.normal}G（総G：${g.total}G）\nボーナス：${$('calc-bonus').textContent}\nST：${$('calc-st').textContent}\n下段ベル：${$('calc-bell').textContent}\nCZ：${num('input-cz')}回\n3周期目：${$('calc-p3').textContent}\n4周期目：${$('calc-p4').textContent}\nチャンス目3000pt：${$('calc-ch').textContent}\n裏景之：${$('calc-rev').textContent}\n`;
  HISTORY_DEFS.forEach(d=>{if(hist[d.key].length){const c={};hist[d.key].forEach(h=>c[h.v]=(c[h.v]||0)+1);t+=`${d.title}：`+Object.entries(c).map(([k,v])=>`${k}×${v}`).join('、')+'\n';}});
  t+=`設定推測：`+pct.map((p,i)=>`${i+1}:${p}%`).join(' ');
  return t;}
